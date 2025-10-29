@@ -5,107 +5,120 @@ on:
     branches:
       - 'main'
     tags:
-      - 'v*.*.*' # 仅在打 Tag 时触发发布
+      - 'v*.*.*'
   workflow_dispatch:
 
 concurrency:
-  group: build-release-312
+  group: build-release-docker
   cancel-in-progress: true
 
 jobs:
   build-artifacts:
-    name: Build on ${{ matrix.os }} using Python 3.12
+    name: Build on ${{ matrix.python-version }} in Docker
+    runs-on: ubuntu-latest
     env:
       PYTHONUTF8: "1"
       PYTHONIOENCODING: "utf-8"
 
-    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ ubuntu-latest ]
-        python-version: [ "3.12" ]
+        python-version: [ "2.7", "3.12" ]
+        # 定义对应 Python 版本的 Docker 镜像
+        include:
+          - python-version: "2.7"
+            docker_image: python:2.7-slim
+          - python-version: "3.12"
+            docker_image: python:3.12-slim
+
+    container: ${{ matrix.docker_image }} # 使用矩阵中定义的镜像作为构建环境
 
     steps:
       - name: 📥 Checkout source code
         uses: actions/checkout@v4
 
-      - name: 🐍 Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: 📦 Create virtualenv and set PYTHON_EXEC
-        run: |
-          python -m venv venv
-          if [[ -f "venv/bin/python" ]]; then
-            echo "PYTHON_EXEC=$(pwd)/venv/bin/python" >> $GITHUB_ENV
-          elif [[ -f "venv/Scripts/python.exe" ]]; then
-            echo "PYTHON_EXEC=$(pwd)/venv/Scripts/python.exe" >> $GITHUB_ENV
-          else
-            echo "Error: Python executable not found in venv."
-            exit 1
-          fi
-        shell: bash
+      # 在容器内，PYTHON_EXEC 就是 'python'
+      - name: Set PYTHON_EXEC (Container Context)
+        run: echo "PYTHON_EXEC=python" >> $GITHUB_ENV
 
       - name: 📚 Install build dependencies
         run: |
-          $PYTHON_EXEC -m pip install --upgrade pip
-          $PYTHON_EXEC -m pip install wheel build setuptools
+          pip install --upgrade pip
+          # 对于 2.7 和 3.12，我们需要 setuptools 和 wheel
+          pip install setuptools wheel build
         shell: bash
 
-      - name: 🏗️ Build sdist and wheel (Modern Formats)
-        # 使用 build 工具构建标准的 sdist 和 wheel
+      - name: 🏗️ Build Artifacts
         run: |
-          echo 'Building standard sdist and wheel...'
-          $PYTHON_EXEC -m build
+          if [[ "${{ matrix.python-version }}" == "3.12" ]]; then
+            echo "Building sdist and wheel for Python 3.12..."
+            # 使用 build 工具进行现代构建
+            python -m build
+          else
+            echo "Building sdist for Python 2.7..."
+            # 2.7 环境使用 setup.py 构建 sdist
+            python setup.py sdist
+          fi
         shell: bash
 
-      - name: 🏗️ Build Egg Package (Legacy Format - Optional)
-        run: |
-          echo 'Attempting to build legacy .egg package...'
-          $PYTHON_EXEC setup.py bdist_egg
-        shell: bash
-        continue-on-error: false # 允许 Egg 构建失败
-
-      - name: ⬆️ Upload artifacts for manual inspection/deployment
+      - name: ⬆️ Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: artifacts
-          path: dist/*.whl
+          # 区分 Artifact 名称，避免 2.7 和 3.12 的产物混淆
+          name: artifacts-${{ matrix.python-version }}
+          path: dist/*
           retention-days: 7
 
+  # --- Job 2: 发布到 PyPI ---
   publish:
     name: Publish to PyPI
-    needs: build-artifacts # 依赖于构建成功
-    #    if: startsWith(github.ref, 'refs/tags/v') # 仅在 tag 被创建时运行
+    needs: build-artifacts
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     environment:
-      name: pypi # 如果您配置了环境，这里可以指定
-      url: https://pypi.org/p/pip-fc
+      name: pypi
     permissions:
       id-token: write
 
     steps:
-      - name: 📥 Download artifacts
+      # 1. 下载所有构建产物
+      - name: Download Py2.7 Artifacts
         uses: actions/download-artifact@v4
         with:
-          name: artifacts
-          path: dist/
+          name: artifacts-py27
+          path: dist-py27/
 
-      - name: 🐍 Set up Python
+      - name: Download Py3.12 Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: artifacts-py312
+          path: dist-py312/
+
+      - name: Merge artifacts for unified publishing
+        run: |
+          echo "Merging artifacts from build jobs..."
+          mkdir -p dist
+          # 复制 2.7 的 sdist
+          cp -r dist-py27/* dist/
+          # 复制 3.12 的 sdist 和 wheel (覆盖同名 sdist)
+          cp -r dist-py312/* dist/
+        shell: bash
+
+      # 2. 准备发布环境 (使用最新的 Python 3.x 环境进行发布操作)
+      - name: 🐍 Set up Python for Publishing (3.12)
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Publish to TestPyPI (Recommended First Step)
+      # 3. 发布到 TestPyPI
+      - name: Publish all artifacts to TestPyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
-          password: ${{ secrets.TESTPYPI_API_TOKEN }} # 需要配置 TestPyPI Token
+          password: ${{ secrets.TESTPYPI_API_TOKEN }}
 
+      # 4. 发布到正式 PyPI
       - name: Publish to PyPI (Official Release)
-        uses: pypa/gh-action-pypi-publish@release/v1
-        # 只有在推送的 tag 是正式版本（例如 v1.0.0）时才发布到 PyPI
         if: success() && startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-rc')
+        uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          password: ${{ secrets.PYPI_API_TOKEN }} # 需要配置 PyPI Token
+          password: ${{ secrets.PYPI_API_TOKEN }}
