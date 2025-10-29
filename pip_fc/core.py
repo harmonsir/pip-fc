@@ -52,6 +52,9 @@ BACKUP = [
 
 ALL_MIRRORS = set(MAIN + BACKUP)
 
+DEFAULT_INDEX_URL = "https://pypi.org/simple"
+EXTRA_INDEX_URLS = []
+
 
 class MirrorTester:
     """
@@ -204,16 +207,20 @@ class MirrorTester:
             )
 
 
-def set_global_pip_mirror(mirror_url, backup_mirror_url="https://pypi.org/simple"):
+def set_global_pip_mirror(mirror_url, backup_mirror_url=None):
     """设置 pip 全局镜像源并添加备份为 PyPI 的配置"""
+
     try:
         subprocess.check_call([sys.executable, "-m", "pip", "config", "set", "global.index-url", mirror_url])
         print(f"Global pip mirror has been successfully set to: {mirror_url}")
 
-        subprocess.check_call(
-            [sys.executable, "-m", "pip", "config", "set", "global.extra-index-url", backup_mirror_url]
-        )
-        print(f"Backup mirror has been successfully set to: {backup_mirror_url}")
+        if backup_mirror_url:
+            _kv = " ".join(backup_mirror_url)
+
+            subprocess.check_call(
+                [sys.executable, "-m", "pip", "config", "set", "global.extra-index-url", _kv.strip()]
+            )
+            print(f"Backup mirror has been successfully set to: {backup_mirror_url}")
 
     except subprocess.CalledProcessError as e:
         print(f"Error occurred while setting pip mirror: {e}")
@@ -248,17 +255,37 @@ def core_main():
     print("\n{}\n".format("= " * 20))
     inp = input("Do you want to set the fastest mirror as the global pip mirror? (y/n): ")
     if inp.lower() == "y":
-        set_global_pip_mirror(mirror_url=tester.fastest_url)
+        EXTRA_INDEX_URLS.append(DEFAULT_INDEX_URL)
+        set_global_pip_mirror(
+            mirror_url=tester.fastest_url,
+            backup_mirror_url=EXTRA_INDEX_URLS
+        )
 
 
 def entry_point():
-    parser = argparse.ArgumentParser(description="pip-fc")
-    parser.add_argument("--reset", action="store_true", help="Reset pip configuration to default settings.")
+    parser = argparse.ArgumentParser(description="a tools not only for fast check.")
+    parser.add_argument(
+        "--reset", action="store_true",
+        help="Reset pip configuration to default settings."
+    )
+    parser.add_argument(
+        "--add-baidu", action="store_true",
+        help="(Alpha) Add baidu paddle mirror."
+    )
+    parser.add_argument(
+        "--add-nvidia", action="store_true",
+        help="(Alpha) Add nvidia mirror. if you need to use rapids.ai"
+    )
     args = parser.parse_args()
 
     if args.reset:
         reset_pip_mirror()
         return
+
+    if args.add_nvidia:
+        EXTRA_INDEX_URLS.append("https://pypi.nvidia.com/")
+    if args.add_baidu:
+        EXTRA_INDEX_URLS.append("https://www.paddlepaddle.org.cn/packages/stable/")
 
     core_main()
 
