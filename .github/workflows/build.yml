@@ -1,0 +1,111 @@
+name: Build and Publish Package
+
+on:
+  push:
+    branches:
+      - 'main'
+    tags:
+      - 'v*.*.*' # 仅在打 Tag 时触发发布
+  workflow_dispatch:
+
+concurrency:
+  group: build-release-312
+  cancel-in-progress: true
+
+jobs:
+  build-artifacts:
+    name: Build on ${{ matrix.os }} using Python 3.12
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: "utf-8"
+
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-latest ]
+        python-version: [ "3.12" ]
+
+    steps:
+      - name: 📥 Checkout source code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: 📦 Create virtualenv and set PYTHON_EXEC
+        run: |
+          python -m venv venv
+          if [[ -f "venv/bin/python" ]]; then
+            echo "PYTHON_EXEC=$(pwd)/venv/bin/python" >> $GITHUB_ENV
+          elif [[ -f "venv/Scripts/python.exe" ]]; then
+            echo "PYTHON_EXEC=$(pwd)/venv/Scripts/python.exe" >> $GITHUB_ENV
+          else
+            echo "Error: Python executable not found in venv."
+            exit 1
+          fi
+        shell: bash
+
+      - name: 📚 Install build dependencies
+        run: |
+          $PYTHON_EXEC -m pip install --upgrade pip
+          $PYTHON_EXEC -m pip install wheel build setuptools
+        shell: bash
+
+      - name: 🏗️ Build sdist and wheel (Modern Formats)
+        # 使用 build 工具构建标准的 sdist 和 wheel
+        run: |
+          echo 'Building standard sdist and wheel...'
+          $PYTHON_EXEC -m build
+        shell: bash
+
+      - name: 🏗️ Build Egg Package (Legacy Format - Optional)
+        run: |
+          echo 'Attempting to build legacy .egg package...'
+          $PYTHON_EXEC setup.py bdist_egg
+        shell: bash
+        continue-on-error: false # 允许 Egg 构建失败
+
+      - name: ⬆️ Upload artifacts for manual inspection/deployment
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts
+          path: dist/*.whl
+          retention-days: 7
+
+  publish:
+    name: Publish to PyPI
+    needs: build-artifacts # 依赖于构建成功
+    #    if: startsWith(github.ref, 'refs/tags/v') # 仅在 tag 被创建时运行
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi # 如果您配置了环境，这里可以指定
+      url: https://pypi.org/p/pip-fc
+    permissions:
+      id-token: write
+
+    steps:
+      - name: 📥 Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: artifacts
+          path: dist/
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Publish to TestPyPI (Recommended First Step)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          password: ${{ secrets.TESTPYPI_API_TOKEN }} # 需要配置 TestPyPI Token
+
+      - name: Publish to PyPI (Official Release)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # 只有在推送的 tag 是正式版本（例如 v1.0.0）时才发布到 PyPI
+        if: success() && startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-rc')
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }} # 需要配置 PyPI Token
