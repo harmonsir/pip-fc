@@ -6,7 +6,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="pip-fc",
-    version="0.1.3",
+    version="0.1.4",
     description="轻量级 Python 工具，用于测试多个镜像源的连接速度",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",

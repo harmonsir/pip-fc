@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
+import argparse
 import socket
 import subprocess
 import sys
@@ -222,6 +222,19 @@ def set_global_pip_mirror(mirror_url, backup_mirror_url="https://pypi.org/simple
     return True
 
 
+def reset_pip_mirror():
+    """重置 pip 配置，恢复为默认配置"""
+    try:
+        # 重置全局镜像源
+        subprocess.check_call([sys.executable, "-m", "pip", "config", "unset", "global.index-url"])
+        subprocess.check_call([sys.executable, "-m", "pip", "config", "unset", "global.extra-index-url"])
+        print("pip configuration has been reset to the default settings.")
+    except subprocess.CalledProcessError as e:
+        print(f"Error occurred while resetting pip configuration: {e}")
+        return False
+    return True
+
+
 def core_main():
     if CONCURRENCY_MODE == "threading_py2" and "futures" not in sys.modules:
         print(
@@ -238,5 +251,17 @@ def core_main():
         set_global_pip_mirror(mirror_url=tester.fastest_url)
 
 
-if __name__ == "__main__":
+def entry_point():
+    parser = argparse.ArgumentParser(description="pip-fc")
+    parser.add_argument("--reset", action="store_true", help="Reset pip configuration to default settings.")
+    args = parser.parse_args()
+
+    if args.reset:
+        reset_pip_mirror()
+        return
+
     core_main()
+
+
+if __name__ == "__main__":
+    entry_point()
