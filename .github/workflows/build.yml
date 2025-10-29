@@ -64,7 +64,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           # 区分 Artifact 名称，避免 2.7 和 3.12 的产物混淆
-          name: artifacts-${{ matrix.python-version }}
+          name: artifacts-py${{ matrix.python-version }}
           path: dist/*
           retention-days: 7
 
@@ -72,7 +72,6 @@ jobs:
   publish:
     name: Publish to PyPI
     needs: build-artifacts
-    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -84,13 +83,13 @@ jobs:
       - name: Download Py2.7 Artifacts
         uses: actions/download-artifact@v4
         with:
-          name: artifacts-py27
+          name: artifacts-py2.7
           path: dist-py27/
 
       - name: Download Py3.12 Artifacts
         uses: actions/download-artifact@v4
         with:
-          name: artifacts-py312
+          name: artifacts-py3.12
           path: dist-py312/
 
       - name: Merge artifacts for unified publishing
