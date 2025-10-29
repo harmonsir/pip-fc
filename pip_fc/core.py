@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 
 __PYTHON_VERSION = sys.version_info
 
-# 兼容性导入和版本检查
+# Compatibility imports and version check
 if __PYTHON_VERSION >= (3, 8):
     CONCURRENCY_MODE = "asyncio"
 elif __PYTHON_VERSION >= (3, 0):
@@ -25,7 +25,7 @@ elif CONCURRENCY_MODE == "threading_py3":
     from concurrent.futures import ThreadPoolExecutor  # noqa
 else:
     try:
-        # 尝试导入 Python 2.7 兼容库
+        # Attempt to import Python 2.7 compatibility libraries
         from futures import ThreadPoolExecutor
         from Queue import Queue
 
@@ -58,8 +58,8 @@ EXTRA_INDEX_URLS = []
 
 class MirrorTester:
     """
-    兼容 Python 2.7 到 3.x 的镜像源测速器。
-    根据 Python 版本自动选择 asyncio (>=3.8) 或 ThreadPoolExecutor (<=3.7)。
+    A mirror source speed tester compatible with Python 2.7 to 3.x.
+    Automatically selects asyncio (>=3.8) or ThreadPoolExecutor (<=3.7) based on Python version.
     """
 
     def __init__(self, urls, timeout=5.0):
@@ -68,8 +68,9 @@ class MirrorTester:
         self.results = []
         self.mode = CONCURRENCY_MODE
 
-        print("Detected Python Version: {}.{}.{} ({})".format(*sys.version_info[:3], self.mode))
-        print("{}\n".format("= " * 20))
+        print(
+            f"Detected Python Version: {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro} ({self.mode})")
+        print("=" * 40)
 
         self.__fastest_url = None
 
@@ -78,19 +79,19 @@ class MirrorTester:
         return self.__fastest_url
 
     def _parse_url(self, url):
-        """解析URL，返回主机名和端口。"""
+        """Parse URL and return hostname and port."""
         parsed_url = urlparse(url)
         host = parsed_url.hostname
         port = parsed_url.port or (443 if host.startswith("https://") else 80)
         if not host:
-            raise ValueError("Invalid URL host: {}".format(url))
+            raise ValueError(f"Invalid URL host: {url}")
 
         return host, port
 
-    # --- 核心同步测速函数 (用于 Threading/Fallback) ---
+    # --- Core Sync Speed Test Function (for Threading/Fallback) ---
 
     def _test_connection_sync(self, url):
-        """使用同步 socket 测试单个连接速度。"""
+        """Test a single connection speed using synchronous socket."""
         try:
             host, port = self._parse_url(url)
             ip = socket.gethostbyname(host)
@@ -105,17 +106,17 @@ class MirrorTester:
         try:
             sock.connect((ip, port))
             end_time = time.time()
-            latency = (end_time - start_time) * 1000  # 转换为毫秒
+            latency = (end_time - start_time) * 1000  # Convert to milliseconds
             return url, round(latency, 2)
         except Exception:
             return url, MAX_LATENCY
         finally:
             sock.close()
 
-    # --- 异步执行器 (Asyncio >= 3.8) ---
+    # --- Async Executor (Asyncio >= 3.8) ---
 
     async def _test_connection_async(self, url):
-        """使用 asyncio 测试单个连接速度。"""
+        """Test a single connection speed using asyncio."""
         try:
             host, port = self._parse_url(url)
             ip = socket.gethostbyname(host)
@@ -138,38 +139,38 @@ class MirrorTester:
             return url, MAX_LATENCY
 
     async def _run_async(self):
-        """并行运行所有异步测试任务。"""
+        """Run all async test tasks concurrently."""
         tasks = [self._test_connection_async(url) for url in self.urls]
         return await asyncio.gather(*tasks)
 
-    # --- 主执行逻辑 ---
+    # --- Main Execution Logic ---
 
     def compare_connection_speeds(self):
-        """根据 Python 版本选择执行模式。"""
+        """Choose execution mode based on Python version."""
 
         if self.mode == "unsupported":
             print("Error: Python version is too old (< 2.7 or missing 'futures' dependency for 2.7). Cannot proceed.")
             return
 
-        print("--- Starting connection speed test using {} mode ---".format(self.mode))
+        print(f"--- Starting connection speed test using {self.mode} mode ---")
 
         if self.mode == "asyncio":
-            # 优先使用 asyncio
+            # Prefer asyncio
             try:
-                # asyncio.run 存在于 3.7+，但我们只在 >=3.8 时才启用此分支
+                # asyncio.run exists in 3.7+, but this branch will be enabled only for >=3.8
                 self.results = asyncio.run(self._run_async())
             except Exception as e:
-                print("Asyncio execution failed: {}. Falling back to Threading.".format(e))
+                print(f"Asyncio execution failed: {e}. Falling back to Threading.")
                 self.results = self._run_sync_executor()
 
         elif self.mode.startswith("threading"):
-            # 使用 ThreadPoolExecutor (兼容 2.7 和 3.x)
+            # Use ThreadPoolExecutor (compatible with 2.7 and 3.x)
             self.results = self._run_sync_executor()
 
         self._report_results()
 
     def _run_sync_executor(self):
-        """使用 ThreadPoolExecutor 运行同步测试。"""
+        """Run sync tests using ThreadPoolExecutor."""
         max_workers = min(32, len(self.urls))
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -179,7 +180,7 @@ class MirrorTester:
             return results
 
     def _report_results(self):
-        """报告最终结果。"""
+        """Report the final results."""
         if not self.results:
             print("No results were gathered.")
             return
@@ -189,7 +190,7 @@ class MirrorTester:
         successful_results = [r for r in self.results if r[1] != MAX_LATENCY]
 
         if successful_results:
-            # 兼容 2.7 和 3.x 的 min 函数
+            # Compatible with 2.7 and 3.x min function
             fastest_url, min_latency = min(successful_results, key=lambda x: x[1])
             self.__fastest_url = fastest_url
 
@@ -208,8 +209,7 @@ class MirrorTester:
 
 
 def set_global_pip_mirror(mirror_url, backup_mirror_url=None):
-    """设置 pip 全局镜像源并添加备份为 PyPI 的配置"""
-
+    """Set pip global mirror and add backup as PyPI."""
     try:
         subprocess.check_call([sys.executable, "-m", "pip", "config", "set", "global.index-url", mirror_url])
         print(f"Global pip mirror has been successfully set to: {mirror_url}")
@@ -230,9 +230,8 @@ def set_global_pip_mirror(mirror_url, backup_mirror_url=None):
 
 
 def reset_pip_mirror():
-    """重置 pip 配置，恢复为默认配置"""
+    """Reset pip configuration to default."""
     try:
-        # 重置全局镜像源
         subprocess.check_call([sys.executable, "-m", "pip", "config", "unset", "global.index-url"])
         subprocess.check_call([sys.executable, "-m", "pip", "config", "unset", "global.extra-index-url"])
         print("pip configuration has been reset to the default settings.")
@@ -263,18 +262,18 @@ def core_main():
 
 
 def entry_point():
-    parser = argparse.ArgumentParser(description="a tools not only for fast check.")
+    parser = argparse.ArgumentParser(description="A tool to test mirror sources and configure pip.")
     parser.add_argument(
         "--reset", action="store_true",
         help="Reset pip configuration to default settings."
     )
     parser.add_argument(
         "--add-baidu", action="store_true",
-        help="(Alpha) Add baidu paddle mirror."
+        help="(Alpha) Add Baidu paddle mirror."
     )
     parser.add_argument(
         "--add-nvidia", action="store_true",
-        help="(Alpha) Add nvidia mirror. if you need to use rapids.ai"
+        help="(Alpha) Add nvidia mirror for rapids.ai"
     )
     args = parser.parse_args()
 
