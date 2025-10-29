@@ -2,20 +2,68 @@
 
 > pip-fc 全称是：pip fast check
 
-pip-fc 是一款轻量级的 Python 工具，用于测试多个镜像源的连接速度。通过简单易用的命令行界面，用户可以快速对比不同镜像源的响应时间，从而选择最佳的镜像源进行软件包的安装。支持
-Python 2.7 和 3.x 版本，自动根据 Python 环境选择合适的并发模式（asyncio 或
-threading）。此工具广泛应用于软件开发、数据科学和系统运维等领域，帮助用户优化下载和安装速度。
+`pip-fc` 是一个轻量级的 Python 工具，旨在测试多个镜像源的连接速度，并帮助用户选择最快的镜像源进行软件包安装。支持 Python 2.7 和 3.x 版本，能够自动根据环境选择适合的并发模式（`asyncio` 或 `threading`）。
 
-主要功能：
+---
 
-- 测试多个镜像源的连接速度
-- 自动选择最快的镜像源
-- 支持 Python 2.7 和 3.x 版本
-- 支持并发连接测试，提升测试效率
-- 简单易用的命令行界面
+## 功能
 
-适用场景：
+- 测试多个镜像源的连接速度。
+- 自动选择连接速度最快的镜像源。
+- 支持 Python 2.7 和 3.x 版本。
+- 使用异步（`asyncio`）或线程池（`threading`）来提高测试效率。
+- 简单易用的命令行界面。
 
-- 软件包管理器镜像源测速
-- 自定义镜像源速度比较
-- 优化下载和安装速度
+## 安装
+
+### 使用 `pip` 安装：
+
+```bash
+pip install pip-fc
+```
+
+## 使用方法
+
+通过运行以下命令启动：
+
+`pip-fc` 或者 `python -m pip-fc`
+
+此命令将会测试预设的镜像源，并显示连接速度最快的镜像源。你也可以自定义镜像源进行测试。
+
+### 设置全局镜像源
+
+如果你希望将测试中找到的最快镜像源设置为全局 `pip` 镜像源，可以在运行完成后输入 `y` 来确认：
+
+```bash
+Do you want to set the fastest mirror as the global pip mirror? (y/n): y
+```
+
+此操作将更新 `pip` 的配置文件，设置全局镜像源和回退镜像源。
+
+## 依赖
+
+* `pip`：用于安装和管理 Python 包。
+* `futures`：仅在 Python 2.7 环境下需要，安装时自动处理。
+
+## 示例输出
+
+```
+Detected Python Version: 3.8.5 (asyncio)
+--- Starting connection speed test using asyncio mode ---
+Successfully tested 6 mirrors.
+Fastest Mirror: https://pypi.tuna.tsinghua.edu.cn/simple/
+Latency: 50.12345 ms
+
+--- All Successful Connection Results (URL, Latency in ms) ---
+  https://pypi.tuna.tsinghua.edu.cn/simple/: 50.12345 ms
+  https://mirrors.aliyun.com/pypi/simple/: 65.67890 ms
+  ...
+```
+
+## 贡献
+
+欢迎提出问题、提交 bug 或者贡献代码。如果你有任何问题，或者希望添加新特性，请提交 [issue](https://github.com/harmonsir/pip-fc/issues)。
+
+## 许可
+
+该项目采用 MIT 许可证，详情请见 [LICENSE](LICENSE) 文件。
