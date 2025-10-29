@@ -6,7 +6,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="pip-fc",
-    version="0.1.2",
+    version="0.1.3",
     description="轻量级 Python 工具，用于测试多个镜像源的连接速度",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
@@ -25,10 +25,10 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "pip-fc = pip_fc.core:core_main",
+            "pip-fc = pip_fc.core:entry_point",
         ],
     },
     # PyPI 发布包文件名格式支持
     python_requires=">=2.7, <4",
-    keywords="mirror tester speed test pip concurrency",
+    keywords="mlc-mirror mirror speed pip",
 )
