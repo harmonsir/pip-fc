@@ -145,7 +145,7 @@ class MirrorTester:
 
     # --- Main Execution Logic ---
 
-    def compare_connection_speeds(self):
+    def compare_connection_speeds(self, test_time=2):
         """Choose execution mode based on Python version."""
 
         if self.mode == "unsupported":
@@ -158,14 +158,17 @@ class MirrorTester:
             # Prefer asyncio
             try:
                 # asyncio.run exists in 3.7+, but this branch will be enabled only for >=3.8
-                self.results = asyncio.run(self._run_async())
+                for _ in range(test_time):
+                    self.results += asyncio.run(self._run_async())
             except Exception as e:
                 print(f"Asyncio execution failed: {e}. Falling back to Threading.")
-                self.results = self._run_sync_executor()
+                for _ in range(test_time):
+                    self.results += self._run_sync_executor()
 
         elif self.mode.startswith("threading"):
             # Use ThreadPoolExecutor (compatible with 2.7 and 3.x)
-            self.results = self._run_sync_executor()
+            for _ in range(test_time):
+                self.results += self._run_sync_executor()
 
         self._report_results()
 
@@ -180,24 +183,36 @@ class MirrorTester:
             return results
 
     def _report_results(self):
-        """Report the final results."""
+        """Report the final results, showing only the fastest connection for each URL."""
         if not self.results:
             print("No results were gathered.")
             return
 
         print("\n--- Speed Test Results Summary ---")
 
+        # Filter out the successful results
         successful_results = [r for r in self.results if r[1] != MAX_LATENCY]
 
         if successful_results:
-            # Compatible with 2.7 and 3.x min function
-            fastest_url, min_latency = min(successful_results, key=lambda x: x[1])
+            # Initialize a dictionary to store the minimum latency for each unique URL
+            best_results = {}
+
+            # Iterate over successful results to find the minimum latency for each URL
+            for url, latency in successful_results:
+                if url not in best_results or latency < best_results[url]:
+                    best_results[url] = latency
+
+            # Convert the dictionary to a sorted list by latency
+            sorted_results = sorted(best_results.items(), key=lambda x: x[1])
+
+            # The fastest URL
+            fastest_url, min_latency = sorted_results[0]
             self.__fastest_url = fastest_url
 
-            print(f"The fastest mirror is: {fastest_url}")
-            print(f"Latency: {min_latency:.2f} ms")
+            print(f"*** The fastest mirror is: {fastest_url}")
+            print(f"*** Latency: {min_latency:.2f} ms")
 
-            sorted_results = sorted(successful_results, key=lambda x: x[1])
+            # Optional: Print all sorted unique results
             print("\n--- All Successful Connection Results (URL, Latency in ms) ---")
             for url, latency in sorted_results:
                 print(f"  {url}: {latency:.2f} ms")
@@ -241,6 +256,32 @@ def reset_pip_mirror():
     return True
 
 
+def _input_with_timeout(prompt, timeout=5):
+    """Prompts user for input with a timeout."""
+    from queue import Queue, Empty
+    from threading import Thread
+
+    print(prompt)
+    result_queue = Queue()
+
+    def get_input():
+        user_input = input()
+        result_queue.put(user_input)
+
+    # Start the input thread
+    input_thread = Thread(target=get_input)
+    input_thread.daemon = True  # Ensure it won't block program exit
+    input_thread.start()
+
+    # Wait for the input or timeout
+    try:
+        user_input = result_queue.get(timeout=timeout)
+        return user_input
+    except Empty:
+        print("\nTimeout reached! No input received.")
+        return None
+
+
 def core_main():
     if CONCURRENCY_MODE == "threading_py2" and "futures" not in sys.modules:
         print(
@@ -252,13 +293,17 @@ def core_main():
     tester.compare_connection_speeds()
 
     print("\n{}\n".format("= " * 20))
-    inp = input("Do you want to set the fastest mirror as the global pip mirror? (y/n): ")
-    if inp.lower() == "y":
+    inp = _input_with_timeout("Do you want to set the fastest mirror as the global pip mirror? (y/n): ")
+    if inp and inp.lower() == "y":
+        print("Setting the fastest mirror...")
         EXTRA_INDEX_URLS.append(DEFAULT_INDEX_URL)
         set_global_pip_mirror(
             mirror_url=tester.fastest_url,
             backup_mirror_url=EXTRA_INDEX_URLS
         )
+    else:
+        print("Skipping mirror setup.")
+        sys.exit(0)
 
 
 def entry_point():
