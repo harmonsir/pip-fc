@@ -111,6 +111,7 @@ jobs:
 
       # 3. 发布到 TestPyPI
       - name: Publish all artifacts to TestPyPI
+        if: github.ref == 'refs/heads/main'  # Only runs when the branch is 'main'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           print-hash: true

@@ -6,7 +6,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="pip-fc",  # 包名称
-    version="0.1.9",  # 版本号
+    version="0.1.10",  # 版本号
     description="一款轻量级的 Python 工具，用于高效测试多个镜像源的连接速度，帮助用户选择最优的镜像源以提高包管理效率。",
     # 简短描述
     long_description=open("README.md").read(),  # 详细描述，加载 README.md 文件
